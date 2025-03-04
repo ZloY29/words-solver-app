@@ -37,4 +37,4 @@ COPY --from=frontend-builder /app/dist /app/static
 ENV FLASK_STATIC_FOLDER=/app/static
 
 # Команда для запуска бэкенда
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:$PORT"]
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8000"]
