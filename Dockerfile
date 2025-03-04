@@ -14,11 +14,18 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
+    libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
 # Установка зависимостей бэкенда
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# Копируем файл модели
+COPY letter_recognition_model.h5 .
+
+# Копируем файл словаря
+COPY cleaned_filtered_russian_words.json .
 
 # Копируем код бэкенда
 COPY app.py .
