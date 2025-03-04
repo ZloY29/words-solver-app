@@ -7,17 +7,23 @@ COPY . .
 RUN npm run build
 
 # Стадия для бэкенда
-FROM python:3.9-slim as backend
+FROM python:3.9 as backend
 WORKDIR /app
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Установка зависимостей бэкенда
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Копируем код бэкенда
 COPY app.py .
 
-# Копируем собранный фронтенд в папку, доступную для Flask
+# Копируем собранный фронтенд в папку static
 COPY --from=frontend-builder /app/dist /app/static
 
 # Указываем Flask, где искать статические файлы
