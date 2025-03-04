@@ -8,15 +8,15 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
 
 # Инициализация Flask-приложения
-app = Flask(__name__, static_folder='dist')
+app = Flask(__name__, static_folder='static')
 
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve(path):
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
+@app.route("/")
+def index():
+    return send_from_directory(app.static_folder, "index.html")
+
+@app.route("/<path:path>")
+def static_files(path):
+    return send_from_directory(app.static_folder, path)
 
 # === 1. Функция для обрезки изображения ===
 def manual_crop(image, x_start, y_start, x_end, y_end):
@@ -339,4 +339,4 @@ def upload_file():
 
 # Запуск сервера
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", port=5000)
