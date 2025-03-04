@@ -12,6 +12,7 @@ google-auth==2.38.0
 google-auth-oauthlib==1.0.0
 google-pasta==0.2.0
 grpcio==1.70.0
+gunicorn==23.0.0
 h5py==3.13.0
 idna==3.10
 importlib_metadata==8.6.1
