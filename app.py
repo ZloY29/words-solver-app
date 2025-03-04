@@ -10,6 +10,9 @@ from tensorflow.keras.preprocessing.image import img_to_array
 # Инициализация Flask-приложения
 app = Flask(__name__, static_folder='static')
 
+# === Загружаем модель нейросети ===
+model = load_model('letter_recognition_model.h5')
+
 @app.route("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
@@ -53,9 +56,6 @@ purple_range = ([100, 50, 150], [137, 255, 255])  # Фиолетовый (x3, c3
 
 # === 5. Основная логика обработки изображения ===
 def process_image(image_path):
-    # === Загружаем модель нейросети ===
-    model = load_model('letter_recognition_model.h5')
-
     # Чтение изображения
     image = cv2.imread(image_path)
     if image is None:
