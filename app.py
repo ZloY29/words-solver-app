@@ -6,6 +6,8 @@ import json
 import os
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
+from PIL import Image
+from io import BytesIO
 
 # Инициализация Flask-приложения
 app = Flask(__name__, static_folder='static')
@@ -315,9 +317,24 @@ def upload_file():
     if file.filename == '':
         return json.dumps({"error": "No selected file"}), 400, {'Content-Type': 'application/json; charset=utf-8'}
 
-    # Сохранение файла временно
-    file_path = "temp_image.jpg"
-    file.save(file_path)
+    try:
+        # 1) Открываем входной файл через Pillow
+        img = Image.open(file.stream)  # file.stream позволяет читать данные напрямую
+
+        # 2) Приводим к RGB (убираем альфа-канал, если он есть)
+        img = img.convert("RGB")
+
+        # 3) Изменяем размер на 590×1280 (AntiAlias = высокое качество)
+        img = img.resize((590, 1280), Image.Resampling.LANCZOS)
+
+        # 4) Сохраняем во временный файл в формате JPEG
+        file_path = "temp_image.jpg"
+        img.save(file_path, format="JPEG", quality=95)
+
+    except Exception as e:
+        # Если что-то пошло не так при чтении/преобразовании
+        error_data = json.dumps({"error": f"Failed to preprocess image: {str(e)}"}, ensure_ascii=False)
+        return error_data, 500, {'Content-Type': 'application/json; charset=utf-8'}
 
     try:
         # Обработка изображения
