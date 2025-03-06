@@ -1,6 +1,6 @@
 <template>
   <div class="app">
-    <h1>Photo Word Finder</h1>
+    <h1>Word Helper</h1>
     <input type="file" accept="image/*" @change="handleFileChange" />
     <button @click="uploadImage" :disabled="!selectedImage">Upload Image</button>
     <div v-if="loading">Loading...</div>
