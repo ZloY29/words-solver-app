@@ -54,6 +54,9 @@ def is_color_in_range(color, color_range):
 # === 4. Диапазоны цветов множителей ===
 orange_range = ([0, 50, 150], [30, 255, 255])  # Оранжевый (x2, c2)
 purple_range = ([100, 50, 150], [137, 255, 255])  # Фиолетовый (x3, c3)
+##################################################################
+red_range = ([35, 80, 220], [70, 130, 250])  # Красный
+##################################################################
 
 
 # === 5. Основная логика обработки изображения ===
@@ -96,6 +99,25 @@ def process_image(image_path):
 
             # Вырезаем ячейку
             cell = cropped_image[y_start:y_end, x_start:x_end]
+
+
+            ####################################################################
+
+            shift_x = int(cell_width * 0.15)  # Смещение внутрь по X
+            shift_y = int(cell_height * 0.15)  # Смещение внутрь по Y
+            corner_size = int(cell_width * 0.2)  # Размер области для анализа
+            bottom_right_region = cell[-corner_size - shift_y: -shift_y, -corner_size - shift_x: -shift_x]
+            bottom_right_hsv = avg_hsv(bottom_right_region)
+            if is_color_in_range(bottom_right_hsv, red_range):
+                # Определяем размер квадрата – можете изменить коэффициент по своему усмотрению
+                square_size = int(cell_width * 0.27)  # измените коэффициент, если нужно
+
+                # Рисуем прямоугольник (квадрат) в правом нижнем углу
+                cv2.rectangle(cell, (cell_width - square_size, cell_height - square_size), (cell_width, cell_height),
+                              (255, 255, 255), -1)
+
+            ####################################################################
+
 
             # === 11. Распознаем букву ===
             cell_resized = cv2.resize(cell, (64, 64))  # Изменяем размер для модели
