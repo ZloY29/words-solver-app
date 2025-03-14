@@ -17,12 +17,8 @@ app = Flask(__name__, static_folder='static')
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
-client = MongoClient(
-    MONGO_URI,
-    tls=True,
-    tlsAllowInvalidCertificates=True,  # для отладки – в продакшене лучше убрать
-    tlsCAFile=certifi.where()
-)
+client = MongoClient(MONGO_URI)
+
 db = client["word_helper_db"]
 dictionary_collection = db["dictionary"]
 

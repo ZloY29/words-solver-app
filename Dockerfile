@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     libgl1-mesa-glx \
+    ca-certificates \
+    openssl \
     && rm -rf /var/lib/apt/lists/*
 
 # Установка зависимостей бэкенда
