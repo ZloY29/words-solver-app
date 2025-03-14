@@ -1,4 +1,4 @@
-from flask import Flask, request, send_from_directory
+from flask import Flask, request, send_from_directory, jsonify
 import cv2
 import numpy as np
 import itertools
@@ -7,13 +7,122 @@ import os
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
 from PIL import Image
-from io import BytesIO
+from dotenv import load_dotenv
+from pymongo import MongoClient
+import certifi
 
 # Инициализация Flask-приложения
 app = Flask(__name__, static_folder='static')
 
+load_dotenv()
+
+MONGO_URI = os.getenv("MONGO_URI")
+client = MongoClient(
+    MONGO_URI,
+    tls=True,
+    tlsAllowInvalidCertificates=True,  # для отладки – в продакшене лучше убрать
+    tlsCAFile=certifi.where()
+)
+db = client["word_helper_db"]
+dictionary_collection = db["dictionary"]
+
+def get_dictionary_words():
+    """Возвращает список слов из коллекции."""
+    words_cursor = dictionary_collection.find({}, {"word": 1, "_id": 0})
+    return [doc["word"] for doc in words_cursor]
+
 # === Загружаем модель нейросети ===
 model = load_model('letter_recognition_model.h5')
+
+
+class TrieNode:
+    """ Узел Trie (каждая буква — отдельный узел) """
+
+    def __init__(self):
+        self.children = {}
+        self.is_end_of_word = False
+
+
+class Trie:
+    """ Префиксное дерево (Trie) для хранения словаря """
+
+    def __init__(self):
+        self.root = TrieNode()
+
+    def insert(self, word):
+        """ Вставляем слово в Trie """
+        node = self.root
+        for char in word:
+            if char not in node.children:
+                node.children[char] = TrieNode()
+            node = node.children[char]
+        node.is_end_of_word = True
+
+    def search(self, word):
+        """ Проверяем, есть ли слово в Trie """
+        node = self.root
+        for char in word:
+            if char not in node.children:
+                return False
+            node = node.children[char]
+        return node.is_end_of_word
+
+    def starts_with(self, prefix):
+        """ Проверяем, есть ли слова с таким префиксом """
+        node = self.root
+        for char in prefix:
+            if char not in node.children:
+                return False
+            node = node.children[char]
+        return True  # Если дошли до конца префикса, значит он существует
+
+
+# === 2️⃣ Загружаем словарь и строим Trie ===
+dictionary_words = get_dictionary_words()
+trie = Trie()
+for word in dictionary_words:
+    trie.insert(word)
+
+print(f"✅ Trie построен! Всего слов: {len(dictionary_words)}")
+
+
+@app.route('/add_word', methods=['POST'])
+def add_word():
+    data = request.get_json()
+    new_word = data.get("word", "").strip()
+    if not new_word:
+        return jsonify({"error": "Слово не указано"}), 400
+
+    # Добавляем слово в базу
+    result = dictionary_collection.insert_one({"word": new_word})
+
+    # Обновляем Trie (можно просто вставить новое слово)
+    trie.insert(new_word)
+
+    return jsonify({"message": f"Слово '{new_word}' добавлено", "id": str(result.inserted_id)}), 200
+
+
+@app.route('/remove_word', methods=['DELETE'])
+def remove_word():
+    data = request.get_json()
+    word_to_remove = data.get("word", "").strip()
+    if not word_to_remove:
+        return jsonify({"error": "Слово не указано"}), 400
+
+    # Удаляем слово из базы
+    result = dictionary_collection.delete_one({"word": word_to_remove})
+    if result.deleted_count == 0:
+        return jsonify({"error": "Слово не найдено"}), 404
+
+    # Обновляем Trie – здесь можно перестроить дерево целиком
+    # (например, получить список слов из базы и пересоздать Trie)
+    global trie
+    dictionary_words = get_dictionary_words()
+    trie = Trie()
+    for word in dictionary_words:
+        trie.insert(word)
+
+    return jsonify({"message": f"Слово '{word_to_remove}' удалено"}), 200
 
 @app.route("/")
 def index():
@@ -208,56 +317,6 @@ def process_image(image_path):
 
     # Создаём board_rus с русскими буквами
     board_rus = [[(translit_to_rus.get(cell[0], cell[0]).lower(), cell[1]) for cell in row] for row in board]
-
-    class TrieNode:
-        """ Узел Trie (каждая буква — отдельный узел) """
-
-        def __init__(self):
-            self.children = {}
-            self.is_end_of_word = False
-
-    class Trie:
-        """ Префиксное дерево (Trie) для хранения словаря """
-
-        def __init__(self):
-            self.root = TrieNode()
-
-        def insert(self, word):
-            """ Вставляем слово в Trie """
-            node = self.root
-            for char in word:
-                if char not in node.children:
-                    node.children[char] = TrieNode()
-                node = node.children[char]
-            node.is_end_of_word = True
-
-        def search(self, word):
-            """ Проверяем, есть ли слово в Trie """
-            node = self.root
-            for char in word:
-                if char not in node.children:
-                    return False
-                node = node.children[char]
-            return node.is_end_of_word
-
-        def starts_with(self, prefix):
-            """ Проверяем, есть ли слова с таким префиксом """
-            node = self.root
-            for char in prefix:
-                if char not in node.children:
-                    return False
-                node = node.children[char]
-            return True  # Если дошли до конца префикса, значит он существует
-
-    # === 2️⃣ Загружаем словарь и строим Trie ===
-    with open("cleaned_filtered_russian_words.json", "r", encoding="utf-8") as f:
-        words = json.load(f)
-
-    trie = Trie()
-    for word in words:
-        trie.insert(word)
-
-    print(f"✅ Trie построен! Всего слов: {len(words)}")
 
     GRID_SIZE = len(board_rus)
 
