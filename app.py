@@ -85,40 +85,44 @@ print(f"✅ Trie построен! Всего слов: {len(dictionary_words)}"
 @app.route('/add_word', methods=['POST'])
 def add_word():
     data = request.get_json()
-    new_word = data.get("word", "").strip()
+    new_word = data.get("word", "").strip().lower()  # Приводим к нижнему регистру
     if not new_word:
         return jsonify({"error": "Слово не указано"}), 400
+
+    # Проверяем, существует ли слово уже в базе
+    if dictionary_collection.find_one({"word": new_word}):
+        return jsonify({"error": f"Слово '{new_word}' уже существует"}), 400
 
     # Добавляем слово в базу
     result = dictionary_collection.insert_one({"word": new_word})
 
-    # Обновляем Trie (можно просто вставить новое слово)
+    # Обновляем Trie, добавляя новое слово
     trie.insert(new_word)
 
     return jsonify({"message": f"Слово '{new_word}' добавлено", "id": str(result.inserted_id)}), 200
 
 
-@app.route('/remove_word', methods=['DELETE'])
-def remove_word():
+@app.route('/remove_words', methods=['DELETE'])
+def remove_words():
     data = request.get_json()
-    word_to_remove = data.get("word", "").strip()
-    if not word_to_remove:
-        return jsonify({"error": "Слово не указано"}), 400
+    words_to_remove = data.get("words", [])
+    if not words_to_remove:
+        return jsonify({"error": "Список слов не указан"}), 400
 
-    # Удаляем слово из базы
-    result = dictionary_collection.delete_one({"word": word_to_remove})
+    # Удаляем все слова, которые есть в списке
+    result = dictionary_collection.delete_many({"word": {"$in": words_to_remove}})
     if result.deleted_count == 0:
-        return jsonify({"error": "Слово не найдено"}), 404
+        return jsonify({"error": "Ни одно слово не найдено для удаления"}), 404
 
-    # Обновляем Trie – здесь можно перестроить дерево целиком
-    # (например, получить список слов из базы и пересоздать Trie)
+    # Перестраиваем Trie полностью после удаления
     global trie
     dictionary_words = get_dictionary_words()
     trie = Trie()
     for word in dictionary_words:
         trie.insert(word)
 
-    return jsonify({"message": f"Слово '{word_to_remove}' удалено"}), 200
+    return jsonify({"message": f"Удалено слов: {result.deleted_count}"}), 200
+
 
 @app.route("/")
 def index():
