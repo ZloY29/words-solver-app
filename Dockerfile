@@ -32,8 +32,6 @@ COPY cleaned_filtered_russian_words.json .
 # Копируем код бэкенда
 COPY app.py .
 
-COPY .env .
-
 # Копируем собранный фронтенд в папку static
 COPY --from=frontend-builder /app/dist /app/static
 
