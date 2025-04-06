@@ -181,13 +181,13 @@ def process_image(image_path):
         return {"error": "Failed to read the image"}
     print(f"[Time] Чтение изображения: {time.time() - t0:.3f} сек")
 
-    # === 7. Обрезаем изображение (идеальные координаты) ===
+    # Обрезаем изображение (идеальные координаты)
     t0 = time.time()
-    x_start, y_start, x_end, y_end = 37, 445, 552, 975
-    cropped_image = manual_crop(image, x_start, y_start, x_end, y_end)
+    x_start_crop, y_start_crop, x_end_crop, y_end_crop = 37, 445, 552, 975
+    cropped_image = manual_crop(image, x_start_crop, y_start_crop, x_end_crop, y_end_crop)
     print(f"[Time] Обрезка изображения: {time.time() - t0:.3f} сек")
 
-    # === 8. Разделяем поле на 5x5 ===
+    # Разбиваем поле на 5x5
     t0 = time.time()
     GRID_SIZE = 5
     image_height, image_width, _ = cropped_image.shape
@@ -195,7 +195,7 @@ def process_image(image_path):
     cell_width = image_width // GRID_SIZE
     print(f"[Time] Разбиение на клетки: {time.time() - t0:.3f} сек")
 
-    # === 9. Метки классов ===
+    # Метки классов
     class_labels = {
         0: 'A', 1: 'B', 2: 'Ch', 3: 'D', 4: 'E', 5: 'E**', 6: 'F', 7: 'G', 8: 'H', 9: 'I',
         10: 'J', 11: 'K', 12: 'L', 13: 'M', 14: 'N', 15: 'O', 16: 'P', 17: 'R', 18: 'S', 19: 'Sch',
@@ -203,48 +203,46 @@ def process_image(image_path):
         30: 'c2', 31: 'c3', 32: 'hard', 33: 'soft', 34: 'x2', 35: 'x3'
     }
 
-    # === 10. Распознавание букв и множителей ===
-    t0 = time.time()
+    # Подготовка для распознавания клеток: будем собирать батч предобработанных изображений
+    cells_batch = []      # для первичного распознавания всех 25 клеток
+    cells_mapping = []    # для сопоставления (row, col, multiplier)
     board = []
+
+    # Для хранения множителей, определённых на этапе распознавания клеток
     detected_multipliers = {}
 
+    # Обходим клетки (5x5)
     for row in range(GRID_SIZE):
         row_data = []
         for col in range(GRID_SIZE):
             # Вычисляем границы ячейки
-            x_start = col * cell_width
-            y_start = row * cell_height
-            x_end = (col + 1) * cell_width
-            y_end = (row + 1) * cell_height
+            cell_x_start = col * cell_width
+            cell_y_start = row * cell_height
+            cell_x_end = (col + 1) * cell_width
+            cell_y_end = (row + 1) * cell_height
 
             # Вырезаем ячейку
-            cell = cropped_image[y_start:y_end, x_start:x_end]
+            cell = cropped_image[cell_y_start:cell_y_end, cell_x_start:cell_x_end]
 
-            ####################################################################
+            # Дополнительная обработка для определения наличия множителя
             shift_x = int(cell_width * 0.15)  # Смещение внутрь по X
             shift_y = int(cell_height * 0.15)  # Смещение внутрь по Y
             corner_size = int(cell_width * 0.2)  # Размер области для анализа
+
+            # Анализ правого нижнего угла для заливки множителя (если красный цвет обнаружен)
             bottom_right_region = cell[-corner_size - shift_y: -shift_y, -corner_size - shift_x: -shift_x]
             bottom_right_hsv = avg_hsv(bottom_right_region)
             if is_color_in_range(bottom_right_hsv, red_range):
                 square_size = int(cell_width * 0.27)
-                cv2.rectangle(cell, (cell_width - square_size, cell_height - square_size), (cell_width, cell_height),
-                              (255, 255, 255), -1)
-            ####################################################################
+                cv2.rectangle(cell, (cell_width - square_size, cell_height - square_size),
+                              (cell_width, cell_height), (255, 255, 255), -1)
 
-            # === 11. Распознаем букву ===
+            # Предварительная обработка ячейки для модели
             cell_resized = cv2.resize(cell, (64, 64))
             cell_array = img_to_array(cell_resized) / 255.0
-            cell_array = np.expand_dims(cell_array, axis=0)
+            cell_array = np.expand_dims(cell_array, axis=0)  # shape (1, 64, 64, 3)
 
-            prediction = model.predict(cell_array)
-            predicted_class = np.argmax(prediction[0])
-            letter = class_labels[predicted_class]
-
-            # === 12. Определяем множитель ===
-            shift_x = int(cell_width * 0.15)
-            shift_y = int(cell_height * 0.15)
-            corner_size = int(cell_width * 0.2)
+            # Определяем множитель (анализ верхнего левого и нижнего левого углов)
             top_left_region = cell[shift_y:shift_y + corner_size, shift_x:shift_x + corner_size]
             bottom_left_region = cell[-corner_size - shift_y:-shift_y, shift_x:shift_x + corner_size]
 
@@ -263,41 +261,58 @@ def process_image(image_path):
 
             if multiplier:
                 detected_multipliers[(row, col)] = multiplier
-                corner_size = int(cell_width * 0.58)
+                # Если множитель найден, закрашиваем соответствующую область
+                large_corner = int(cell_width * 0.58)
                 if multiplier in ["x2", "x3"]:
-                    pts = np.array([[0, 0], [corner_size, 0], [0, corner_size]], np.int32)
+                    pts = np.array([[0, 0], [large_corner, 0], [0, large_corner]], np.int32)
                 else:
-                    pts = np.array([[0, cell_height], [corner_size, cell_height], [0, cell_height - corner_size]],
-                                   np.int32)
+                    pts = np.array([[0, cell_height], [large_corner, cell_height], [0, cell_height - large_corner]], np.int32)
                 cv2.fillPoly(cell, [pts], (255, 255, 255))
 
-            row_data.append((letter, multiplier))
-            print(f"Cell ({row}, {col}) - Letter: {letter}, Multiplier: {multiplier}")
+            # Добавляем placeholder в board (буква будет определена батчем)
+            row_data.append((None, multiplier))
+            # Сохраняем ячейку и её координаты для батчевого предсказания
+            cells_batch.append(cell_array)
+            cells_mapping.append((row, col, multiplier))
         board.append(row_data)
+
+    # Объединяем все ячейки в один батч и вызываем модель один раз
+    t0 = time.time()
+    batch = np.vstack(cells_batch)  # shape (25, 64, 64, 3)
+    predictions = model.predict(batch)
+    for i, (row, col, multiplier) in enumerate(cells_mapping):
+        predicted_class = np.argmax(predictions[i])
+        letter = class_labels[predicted_class]
+        board[row][col] = (letter, multiplier)
+        print(f"Cell ({row}, {col}) - Letter: {letter}, Multiplier: {multiplier}")
     print(f"[Time] Распознавание клеток: {time.time() - t0:.3f} сек")
 
-    # === Обновляем клетки с множителями ===
+    # Обновление клеток с множителями в отдельном батче
     t0 = time.time()
+    update_cells = []
+    update_mapping = []  # (row, col)
     for (row, col), multiplier in detected_multipliers.items():
-        x_start = col * cell_width
-        y_start = row * cell_height
-        x_end = (col + 1) * cell_width
-        y_end = (row + 1) * cell_height
-
-        cell = cropped_image[y_start:y_end, x_start:x_end]
+        cell_x_start = col * cell_width
+        cell_y_start = row * cell_height
+        cell_x_end = (col + 1) * cell_width
+        cell_y_end = (row + 1) * cell_height
+        cell = cropped_image[cell_y_start:cell_y_end, cell_x_start:cell_x_end]
         cell_resized = cv2.resize(cell, (64, 64))
         cell_array = img_to_array(cell_resized) / 255.0
         cell_array = np.expand_dims(cell_array, axis=0)
-
-        prediction = model.predict(cell_array)
-        predicted_class = np.argmax(prediction[0])
-        new_letter = class_labels[predicted_class]
-
-        board[row][col] = (new_letter, multiplier)
-        print(f"Updated Cell ({row}, {col}) - Letter: {new_letter}, Multiplier: {multiplier}")
+        update_cells.append(cell_array)
+        update_mapping.append((row, col))
+    if update_cells:
+        update_batch = np.vstack(update_cells)
+        update_predictions = model.predict(update_batch)
+        for i, (row, col) in enumerate(update_mapping):
+            predicted_class = np.argmax(update_predictions[i])
+            new_letter = class_labels[predicted_class]
+            board[row][col] = (new_letter, detected_multipliers[(row, col)])
+            print(f"Updated Cell ({row}, {col}) - Letter: {new_letter}, Multiplier: {detected_multipliers[(row, col)]}")
     print(f"[Time] Обновление клеток: {time.time() - t0:.3f} сек")
 
-    # === Создаём русскую версию board ===
+    # Создаём русскую версию board
     t0 = time.time()
     translit_to_rus = {
         "A": "А", "B": "Б", "Ch": "Ч", "D": "Д", "E": "Е", "E**": "Э", "F": "Ф", "G": "Г", "H": "Х", "I": "И",
@@ -308,7 +323,7 @@ def process_image(image_path):
     board_rus = [[(translit_to_rus.get(cell[0], cell[0]).lower(), cell[1]) for cell in row] for row in board]
     print(f"[Time] Создание русской версии доски: {time.time() - t0:.3f} сек")
 
-    # === Функция подсчета очков ===
+    # Функция подсчета очков (оставляем без изменений)
     def calculate_word_score(word, letter_multipliers, word_multipliers):
         total_score = 0
         for i, letter in enumerate(word):
@@ -324,7 +339,7 @@ def process_image(image_path):
             total_score *= 3
         return total_score
 
-    # === DFS-поиск слов в Trie ===
+    # DFS-поиск слов в Trie
     t0 = time.time()
     found_words = {}
 
@@ -352,7 +367,7 @@ def process_image(image_path):
         dfs(i, j, [letter], {(i, j)}, [multiplier], [multiplier] if multiplier in ["c2", "c3"] else [])
     print(f"[Time] DFS-поиск: {time.time() - t0:.3f} сек")
 
-    # === Вывод результатов ===
+    # Вывод результатов
     t0 = time.time()
     sorted_words = sorted(found_words.items(), key=lambda x: x[1], reverse=True)
     print(f"🔍 Найдено {len(sorted_words)} слов:")
