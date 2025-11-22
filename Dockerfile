@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
 
 # Установка зависимостей бэкенда
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем файл модели
 COPY letter_recognition_model.h5 .
