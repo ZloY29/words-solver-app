@@ -38,5 +38,14 @@ COPY --from=frontend-builder /app/dist /app/static
 # Указываем Flask, где искать статические файлы
 ENV FLASK_STATIC_FOLDER=/app/static
 
+# Чтобы Python сразу писал логи, а не буферил
+ENV PYTHONUNBUFFERED=1
+
 # Команда для запуска бэкенда
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "app:app",
+     "--bind", "0.0.0.0:8000",
+     "--workers", "1",
+     "--threads", "1",
+     "--timeout", "300",
+     "--access-logfile", "-",
+     "--error-logfile", "-"]
