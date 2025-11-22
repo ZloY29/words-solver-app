@@ -42,10 +42,10 @@ ENV FLASK_STATIC_FOLDER=/app/static
 ENV PYTHONUNBUFFERED=1
 
 # Команда для запуска бэкенда
-CMD ["gunicorn", "app:app",
-     "--bind", "0.0.0.0:8000",
-     "--workers", "1",
-     "--threads", "1",
-     "--timeout", "300",
-     "--access-logfile", "-",
-     "--error-logfile", "-"]
+CMD gunicorn app:app \
+    --bind 0.0.0.0:8000 \
+    --workers 1 \
+    --threads 1 \
+    --timeout 300 \
+    --access-logfile - \
+    --error-logfile -
