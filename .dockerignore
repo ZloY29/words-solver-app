@@ -1,0 +1,24 @@
+.git
+.gitignore
+
+# Python мусор
+__pycache__/
+*.py[cod]
+*.log
+
+# Node
+node_modules
+frontend/node_modules
+npm-debug.log
+yarn.lock
+
+# Локальные данные (важно!)
+mongo-data
+*.zip
+*.tar
+*.tar.gz
+
+# IDE
+.vscode
+.idea
+*.iml
