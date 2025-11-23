@@ -1,5 +1,5 @@
 # Стадия для сборки фронтенда
-FROM node:18 as frontend-builder
+FROM node:18-slim as frontend-builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install
@@ -7,7 +7,7 @@ COPY . .
 RUN npm run build
 
 # Стадия для бэкенда
-FROM python:3.9 as backend
+FROM python:3.9-slim as backend
 WORKDIR /app
 
 # Установка системных зависимостей
