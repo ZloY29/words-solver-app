@@ -8,29 +8,28 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
 from PIL import Image
 from dotenv import load_dotenv
-from pymongo import MongoClient
-import certifi
 import time
+import threading
+from werkzeug.exceptions import NotFound
 
 # Инициализация Flask-приложения
 app = Flask(__name__, static_folder='static')
 
 load_dotenv()
 
-MONGO_URI = os.getenv("MONGO_URI")
-client = MongoClient(MONGO_URI)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 
-db = client["word_helper_db"]
-dictionary_collection = db["dictionary"]
+MODEL_PATH = os.path.join(ASSETS_DIR, "letter_recognition_model.h5")
+DICTIONARY_PATH = os.path.join(ASSETS_DIR, "cleaned_filtered_russian_words.json")
+
 
 def get_dictionary_words():
-    """Возвращает список слов из коллекции."""
-    words_cursor = dictionary_collection.find({}, {"word": 1, "_id": 0})
-    return [doc["word"] for doc in words_cursor]
+    with open(DICTIONARY_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 # === Загружаем модель нейросети ===
-model = load_model('letter_recognition_model.h5')
-
+model = load_model(MODEL_PATH)
 
 class TrieNode:
     """ Узел Trie (каждая буква — отдельный узел) """
@@ -83,55 +82,17 @@ for word in dictionary_words:
 print(f"✅ Trie построен! Всего слов: {len(dictionary_words)}")
 
 
-@app.route('/add_word', methods=['POST'])
-def add_word():
-    data = request.get_json()
-    new_word = data.get("word", "").strip().lower()  # Приводим к нижнему регистру
-    if not new_word:
-        return jsonify({"error": "Слово не указано"}), 400
-
-    # Проверяем, существует ли слово уже в базе
-    if dictionary_collection.find_one({"word": new_word}):
-        return jsonify({"error": f"Слово '{new_word}' уже существует"}), 400
-
-    # Добавляем слово в базу
-    result = dictionary_collection.insert_one({"word": new_word})
-
-    # Обновляем Trie, добавляя новое слово
-    trie.insert(new_word)
-
-    return jsonify({"message": f"Слово '{new_word}' добавлено", "id": str(result.inserted_id)}), 200
-
-
-@app.route('/remove_words', methods=['DELETE'])
-def remove_words():
-    data = request.get_json()
-    words_to_remove = data.get("words", [])
-    if not words_to_remove:
-        return jsonify({"error": "Список слов не указан"}), 400
-
-    # Удаляем все слова, которые есть в списке
-    result = dictionary_collection.delete_many({"word": {"$in": words_to_remove}})
-    if result.deleted_count == 0:
-        return jsonify({"error": "Ни одно слово не найдено для удаления"}), 404
-
-    # Перестраиваем Trie полностью после удаления
-    global trie
-    dictionary_words = get_dictionary_words()
-    trie = Trie()
-    for word in dictionary_words:
-        trie.insert(word)
-
-    return jsonify({"message": f"Удалено слов: {result.deleted_count}"}), 200
-
-
 @app.route("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
 
 @app.route("/<path:path>")
 def static_files(path):
-    return send_from_directory(app.static_folder, path)
+    try:
+        return send_from_directory(app.static_folder, path)
+    except NotFound:
+        return send_from_directory(app.static_folder, "index.html")
+
 
 # === 1. Функция для обрезки изображения ===
 def manual_crop(image, x_start, y_start, x_end, y_end):
@@ -431,4 +392,5 @@ def upload_file():
 
 # Запуск сервера
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5075)
+    port = int(os.getenv("PORT", "8000"))
+    app.run(host="0.0.0.0", port=port)
