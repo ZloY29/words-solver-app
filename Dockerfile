@@ -1,19 +1,20 @@
-# Стадия для сборки фронтенда
-FROM node:18-slim as frontend-builder
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm install
-COPY . .
+# Frontend build stage
+FROM node:18-slim AS frontend-builder
+WORKDIR /app/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
 RUN npm run build
 
-# Стадия для бэкенда
-FROM python:3.9-slim as backend
+
+# Backend runtime stage
+FROM python:3.9-slim AS backend
 WORKDIR /app
 
-# Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
     build-essential \
-    libpq-dev \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
@@ -23,33 +24,15 @@ RUN apt-get update && apt-get install -y \
     openssl \
     && rm -rf /var/lib/apt/lists/*
 
-# Установка зависимостей бэкенда
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.txt ./backend/requirements.txt
+RUN pip install --no-cache-dir -r backend/requirements.txt
 
-# Копируем файл модели
-COPY letter_recognition_model.h5 .
+COPY backend/ ./backend/
 
-# Копируем файл словаря
-COPY cleaned_filtered_russian_words.json .
+# Put built SPA into Flask static folder
+COPY --from=frontend-builder /app/frontend/dist ./backend/static
 
-# Копируем код бэкенда
-COPY app.py .
-
-# Копируем собранный фронтенд в папку static
-COPY --from=frontend-builder /app/dist /app/static
-
-# Указываем Flask, где искать статические файлы
-ENV FLASK_STATIC_FOLDER=/app/static
-
-# Чтобы Python сразу писал логи, а не буферил
 ENV PYTHONUNBUFFERED=1
+EXPOSE 8000
 
-# Команда для запуска бэкенда
-CMD gunicorn app:app \
-    --bind 0.0.0.0:8000 \
-    --workers 1 \
-    --threads 1 \
-    --timeout 300 \
-    --access-logfile - \
-    --error-logfile -
+CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "1", "--timeout", "300", "--access-logfile", "-", "--error-logfile", "-"]
