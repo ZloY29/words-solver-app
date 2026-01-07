@@ -24,3 +24,23 @@ build/
 
 # Игнорируем хранение метаданных папки
 .DS_Store
+
+# Node dependencies
+node_modules/
+
+# Vite caches (ускоряют сборку, но в git не нужны)
+*.local
+.vite/
+
+# Python virtualenv variations
+.venv/
+
+# Flask static build output (мы потом будем класть сюда собранный фронт)
+backend/static/
+static/
+
+# Mac metadata (у тебя уже есть .DS_Store, но добавим рекурсивно на всякий)
+**/.DS_Store
+
+# Archives / exports
+__MACOSX/
