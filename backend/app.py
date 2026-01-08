@@ -4,12 +4,11 @@ import numpy as np
 import itertools
 import json
 import os
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.image import img_to_array
+from keras.models import load_model
+from keras.utils import img_to_array
 from PIL import Image
 from dotenv import load_dotenv
 import time
-import threading
 from werkzeug.exceptions import NotFound
 
 # Инициализация Flask-приложения
