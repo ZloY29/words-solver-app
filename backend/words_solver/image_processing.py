@@ -1,9 +1,10 @@
-import itertools
 import time
 
 import cv2
 import numpy as np
 from keras.utils import img_to_array
+
+from .word_search import find_words
 
 
 def manual_crop(image, x_start, y_start, x_end, y_end):
@@ -86,24 +87,6 @@ TRANSLIT_TO_RUS = {
     "x2": "\u04452",   # х2
     "x3": "\u04453",   # х3
 }
-
-
-def calculate_word_score(word, letter_multipliers, word_multipliers):
-    total_score = 0
-    for i, _letter in enumerate(word):
-        base_score = i + 1
-        if letter_multipliers[i] == "x2":
-            base_score *= 2
-        elif letter_multipliers[i] == "x3":
-            base_score *= 3
-        total_score += base_score
-
-    if "c2" in word_multipliers:
-        total_score *= 2
-    if "c3" in word_multipliers:
-        total_score *= 3
-    return total_score
-
 
 def process_image(image_path, model, trie):
     overall_start = time.time()
@@ -253,51 +236,10 @@ def process_image(image_path, model, trie):
         board_rus.append(row_rus)
     print("[Time] Build rus board:", round(time.time() - t0, 3), "sec")
 
-    # DFS over grid using Trie
+    # Find words on board using Trie
     t0 = time.time()
-    found_words = {}
-
-    directions = [(-1, -1), (-1, 0), (-1, 1),
-                  (0, -1),           (0, 1),
-                  (1, -1),  (1, 0),  (1, 1)]
-
-    def dfs(x, y, path, visited, letter_multipliers, word_multipliers):
-        word = "".join(path)
-
-        if not trie.starts_with(word):
-            return
-
-        if len(word) > 1 and trie.search(word):
-            score = calculate_word_score(word, letter_multipliers, word_multipliers)
-            prev = found_words.get(word)
-            if prev is None or score > prev:
-                found_words[word] = score
-
-        for dx, dy in directions:
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < grid_size and 0 <= ny < grid_size and (nx, ny) not in visited:
-                next_letter, multiplier = board_rus[nx][ny]
-                dfs(
-                    nx,
-                    ny,
-                    path + [next_letter],
-                    visited | {(nx, ny)},
-                    letter_multipliers + [multiplier],
-                    word_multipliers + ([multiplier] if multiplier in ["c2", "c3"] else []),
-                )
-
-    for i, j in itertools.product(range(grid_size), repeat=2):
-        letter, multiplier = board_rus[i][j]
-        dfs(
-            i,
-            j,
-            [letter],
-            {(i, j)},
-            [multiplier],
-            [multiplier] if multiplier in ["c2", "c3"] else [],
-        )
-
-    print("[Time] DFS:", round(time.time() - t0, 3), "sec")
+    found_words = find_words(board_rus, trie=trie, grid_size=grid_size)
+    print("[Time] Find words:", round(time.time() - t0, 3), "sec")
 
     # sort results
     t0 = time.time()
