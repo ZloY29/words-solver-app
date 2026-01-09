@@ -44,3 +44,7 @@ static/
 
 # Archives / exports
 __MACOSX/
+
+# Cache
+.ruff_cache/
+.pytest_cache/

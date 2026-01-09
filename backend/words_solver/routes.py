@@ -1,5 +1,7 @@
+import logging
 import os
 import tempfile
+import time
 
 from flask import Blueprint, request
 from PIL import Image
@@ -7,8 +9,6 @@ from PIL import Image
 from .http import json_response
 from .image_processing import process_image
 
-import logging
-import time
 logger = logging.getLogger(__name__)
 
 

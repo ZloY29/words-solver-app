@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: |
+          python -m ruff check backend
+          python -m ruff format --check backend
+
+      - name: Tests
+        run: python -m pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build

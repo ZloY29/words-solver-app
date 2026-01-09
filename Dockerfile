@@ -10,7 +10,7 @@ RUN npm run build
 
 
 # Backend runtime stage
-FROM python:3.9-slim AS backend
+FROM python:3.11-slim AS backend
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \

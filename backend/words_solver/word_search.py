@@ -22,9 +22,14 @@ def find_words(board_rus, trie, grid_size=5):
     found_words = {}
 
     directions = [
-        (-1, -1), (-1, 0), (-1, 1),
-        (0, -1),           (0, 1),
-        (1, -1),  (1, 0),  (1, 1),
+        (-1, -1),
+        (-1, 0),
+        (-1, 1),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (1, 0),
+        (1, 1),
     ]
 
     def dfs(x, y, path, visited, letter_multipliers, word_multipliers):

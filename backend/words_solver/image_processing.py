@@ -40,59 +40,90 @@ def is_color_in_range(color, color_range):
 
 
 # HSV ranges for multipliers
-ORANGE_RANGE = ([0, 50, 150], [30, 255, 255])      # x2, c2
-PURPLE_RANGE = ([100, 50, 150], [137, 255, 255])   # x3, c3
-RED_RANGE = ([35, 80, 220], [70, 130, 250])        # red corner masking
+ORANGE_RANGE = ([0, 50, 150], [30, 255, 255])  # x2, c2
+PURPLE_RANGE = ([100, 50, 150], [137, 255, 255])  # x3, c3
+RED_RANGE = ([35, 80, 220], [70, 130, 250])  # red corner masking
 
 
 CLASS_LABELS = {
-    0: "A", 1: "B", 2: "Ch", 3: "D", 4: "E", 5: "E**", 6: "F", 7: "G", 8: "H", 9: "I",
-    10: "J", 11: "K", 12: "L", 13: "M", 14: "N", 15: "O", 16: "P", 17: "R", 18: "S", 19: "Sch",
-    20: "Sh", 21: "T", 22: "Ts", 23: "U", 24: "V", 25: "Y", 26: "Ya", 27: "Yu", 28: "Z", 29: "Zh",
-    30: "c2", 31: "c3", 32: "hard", 33: "soft", 34: "x2", 35: "x3",
+    0: "A",
+    1: "B",
+    2: "Ch",
+    3: "D",
+    4: "E",
+    5: "E**",
+    6: "F",
+    7: "G",
+    8: "H",
+    9: "I",
+    10: "J",
+    11: "K",
+    12: "L",
+    13: "M",
+    14: "N",
+    15: "O",
+    16: "P",
+    17: "R",
+    18: "S",
+    19: "Sch",
+    20: "Sh",
+    21: "T",
+    22: "Ts",
+    23: "U",
+    24: "V",
+    25: "Y",
+    26: "Ya",
+    27: "Yu",
+    28: "Z",
+    29: "Zh",
+    30: "c2",
+    31: "c3",
+    32: "hard",
+    33: "soft",
+    34: "x2",
+    35: "x3",
 }
 
 
 # Keep payload letters in Cyrillic (represented as unicode escapes to keep source ASCII-only)
 TRANSLIT_TO_RUS = {
-    "A": "\u0430",     # а
-    "B": "\u0431",     # б
-    "Ch": "\u0447",    # ч
-    "D": "\u0434",     # д
-    "E": "\u0435",     # е
-    "E**": "\u044d",   # э
-    "F": "\u0444",     # ф
-    "G": "\u0433",     # г
-    "H": "\u0445",     # х
-    "I": "\u0438",     # и
-    "J": "\u0439",     # й
-    "K": "\u043a",     # к
-    "L": "\u043b",     # л
-    "M": "\u043c",     # м
-    "N": "\u043d",     # н
-    "O": "\u043e",     # о
-    "P": "\u043f",     # п
-    "R": "\u0440",     # р
-    "S": "\u0441",     # с
-    "Sch": "\u0449",   # щ
-    "Sh": "\u0448",    # ш
-    "T": "\u0442",     # т
-    "Ts": "\u0446",    # ц
-    "U": "\u0443",     # у
-    "V": "\u0432",     # в
-    "Y": "\u044b",     # ы
-    "Ya": "\u044f",    # я
-    "Yu": "\u044e",    # ю
-    "Z": "\u0437",     # з
-    "Zh": "\u0436",    # ж
+    "A": "\u0430",  # а
+    "B": "\u0431",  # б
+    "Ch": "\u0447",  # ч
+    "D": "\u0434",  # д
+    "E": "\u0435",  # е
+    "E**": "\u044d",  # э
+    "F": "\u0444",  # ф
+    "G": "\u0433",  # г
+    "H": "\u0445",  # х
+    "I": "\u0438",  # и
+    "J": "\u0439",  # й
+    "K": "\u043a",  # к
+    "L": "\u043b",  # л
+    "M": "\u043c",  # м
+    "N": "\u043d",  # н
+    "O": "\u043e",  # о
+    "P": "\u043f",  # п
+    "R": "\u0440",  # р
+    "S": "\u0441",  # с
+    "Sch": "\u0449",  # щ
+    "Sh": "\u0448",  # ш
+    "T": "\u0442",  # т
+    "Ts": "\u0446",  # ц
+    "U": "\u0443",  # у
+    "V": "\u0432",  # в
+    "Y": "\u044b",  # ы
+    "Ya": "\u044f",  # я
+    "Yu": "\u044e",  # ю
+    "Z": "\u0437",  # з
+    "Zh": "\u0436",  # ж
     "hard": "\u044a",  # ъ
     "soft": "\u044c",  # ь
-
     # these should never form words, but keep them consistent
-    "c2": "\u04412",   # с2
-    "c3": "\u04413",   # с3
-    "x2": "\u04452",   # х2
-    "x3": "\u04453",   # х3
+    "c2": "\u04412",  # с2
+    "c3": "\u04413",  # с3
+    "x2": "\u04452",  # х2
+    "x3": "\u04453",  # х3
 }
 
 
@@ -142,7 +173,9 @@ def process_image(image_path, model, trie):
             corner_size = int(cell_width * 0.2)
 
             # mask bottom-right red region if detected
-            bottom_right_region = cell[-corner_size - shift_y: -shift_y, -corner_size - shift_x: -shift_x]
+            bottom_right_region = cell[
+                -corner_size - shift_y : -shift_y, -corner_size - shift_x : -shift_x
+            ]
             bottom_right_hsv = avg_hsv(bottom_right_region)
             if is_color_in_range(bottom_right_hsv, RED_RANGE):
                 square_size = int(cell_width * 0.27)
@@ -155,8 +188,10 @@ def process_image(image_path, model, trie):
                 )
 
             # detect multipliers by corner colors
-            top_left_region = cell[shift_y:shift_y + corner_size, shift_x:shift_x + corner_size]
-            bottom_left_region = cell[-corner_size - shift_y:-shift_y, shift_x:shift_x + corner_size]
+            top_left_region = cell[shift_y : shift_y + corner_size, shift_x : shift_x + corner_size]
+            bottom_left_region = cell[
+                -corner_size - shift_y : -shift_y, shift_x : shift_x + corner_size
+            ]
 
             top_left_hsv = avg_hsv(top_left_region)
             bottom_left_hsv = avg_hsv(bottom_left_region)
@@ -178,7 +213,11 @@ def process_image(image_path, model, trie):
                     pts = np.array([[0, 0], [large_corner, 0], [0, large_corner]], np.int32)
                 else:
                     pts = np.array(
-                        [[0, cell_height], [large_corner, cell_height], [0, cell_height - large_corner]],
+                        [
+                            [0, cell_height],
+                            [large_corner, cell_height],
+                            [0, cell_height - large_corner],
+                        ],
                         np.int32,
                     )
                 cv2.fillPoly(cell, [pts], (255, 255, 255))
