@@ -1,3 +1,4 @@
+import logging
 import time
 
 import cv2
@@ -5,6 +6,12 @@ import numpy as np
 from keras.utils import img_to_array
 
 from .word_search import find_words
+
+logger = logging.getLogger(__name__)
+
+
+def _log_stage(stage, start):
+    logger.info("timing stage=%s seconds=%.3f", stage, time.perf_counter() - start)
 
 
 def manual_crop(image, x_start, y_start, x_end, y_end):
@@ -88,28 +95,31 @@ TRANSLIT_TO_RUS = {
     "x3": "\u04453",   # х3
 }
 
-def process_image(image_path, model, trie):
-    overall_start = time.time()
 
-    t0 = time.time()
+def process_image(image_path, model, trie):
+    overall_start = time.perf_counter()
+
+    # Read image
+    t0 = time.perf_counter()
     image = cv2.imread(image_path)
     if image is None:
+        logger.warning("failed to read image image_path=%s", image_path)
         return {"error": "Failed to read the image"}
-    print("[Time] Read image:", round(time.time() - t0, 3), "sec")
+    _log_stage("read_image", t0)
 
     # Crop (current hardcoded coordinates)
-    t0 = time.time()
+    t0 = time.perf_counter()
     x_start_crop, y_start_crop, x_end_crop, y_end_crop = 37, 445, 552, 975
     cropped_image = manual_crop(image, x_start_crop, y_start_crop, x_end_crop, y_end_crop)
-    print("[Time] Crop image:", round(time.time() - t0, 3), "sec")
+    _log_stage("crop_image", t0)
 
     # Split into 5x5
-    t0 = time.time()
+    t0 = time.perf_counter()
     grid_size = 5
     image_height, image_width, _ = cropped_image.shape
     cell_height = image_height // grid_size
     cell_width = image_width // grid_size
-    print("[Time] Split to grid:", round(time.time() - t0, 3), "sec")
+    _log_stage("split_grid", t0)
 
     cells_batch = []
     cells_mapping = []
@@ -167,7 +177,10 @@ def process_image(image_path, model, trie):
                 if multiplier in ["x2", "x3"]:
                     pts = np.array([[0, 0], [large_corner, 0], [0, large_corner]], np.int32)
                 else:
-                    pts = np.array([[0, cell_height], [large_corner, cell_height], [0, cell_height - large_corner]], np.int32)
+                    pts = np.array(
+                        [[0, cell_height], [large_corner, cell_height], [0, cell_height - large_corner]],
+                        np.int32,
+                    )
                 cv2.fillPoly(cell, [pts], (255, 255, 255))
 
             cell_resized = cv2.resize(cell, (64, 64))
@@ -181,7 +194,7 @@ def process_image(image_path, model, trie):
         board.append(row_data)
 
     # single batch predict for 25 cells
-    t0 = time.time()
+    t0 = time.perf_counter()
     batch = np.vstack(cells_batch)
     predictions = model.predict(batch)
 
@@ -189,15 +202,15 @@ def process_image(image_path, model, trie):
         predicted_class = int(np.argmax(predictions[i]))
         letter = CLASS_LABELS[predicted_class]
         board[row][col] = (letter, multiplier)
-        print("Cell (%d, %d) - Letter: %s, Multiplier: %s" % (row, col, letter, str(multiplier)))
-    print("[Time] Predict cells:", round(time.time() - t0, 3), "sec")
+        logger.debug("cell row=%d col=%d letter=%s multiplier=%s", row, col, letter, multiplier)
+    _log_stage("predict_cells", t0)
 
     # re-predict cells that had multipliers (second pass)
-    t0 = time.time()
+    t0 = time.perf_counter()
     update_cells = []
     update_mapping = []
 
-    for (row, col), multiplier in detected_multipliers.items():
+    for (row, col), _multiplier in detected_multipliers.items():
         cell_x_start = col * cell_width
         cell_y_start = row * cell_height
         cell_x_end = (col + 1) * cell_width
@@ -218,15 +231,18 @@ def process_image(image_path, model, trie):
             predicted_class = int(np.argmax(update_predictions[i]))
             new_letter = CLASS_LABELS[predicted_class]
             board[row][col] = (new_letter, detected_multipliers[(row, col)])
-            print(
-                "Updated Cell (%d, %d) - Letter: %s, Multiplier: %s"
-                % (row, col, new_letter, detected_multipliers[(row, col)])
+            logger.debug(
+                "cell updated row=%d col=%d letter=%s multiplier=%s",
+                row,
+                col,
+                new_letter,
+                detected_multipliers[(row, col)],
             )
 
-    print("[Time] Update cells:", round(time.time() - t0, 3), "sec")
+    _log_stage("update_cells", t0)
 
     # build Cyrillic board
-    t0 = time.time()
+    t0 = time.perf_counter()
     board_rus = []
     for row in board:
         row_rus = []
@@ -234,18 +250,18 @@ def process_image(image_path, model, trie):
             rus_letter = TRANSLIT_TO_RUS.get(letter, letter)
             row_rus.append((rus_letter, multiplier))
         board_rus.append(row_rus)
-    print("[Time] Build rus board:", round(time.time() - t0, 3), "sec")
+    _log_stage("build_board_rus", t0)
 
     # Find words on board using Trie
-    t0 = time.time()
+    t0 = time.perf_counter()
     found_words = find_words(board_rus, trie=trie, grid_size=grid_size)
-    print("[Time] Find words:", round(time.time() - t0, 3), "sec")
+    _log_stage("find_words", t0)
 
     # sort results
-    t0 = time.time()
+    t0 = time.perf_counter()
     sorted_words = sorted(found_words.items(), key=lambda x: x[1], reverse=True)
-    print("[Time] Sort results:", round(time.time() - t0, 3), "sec")
+    _log_stage("sort_results", t0)
 
-    print("[Time] Total:", round(time.time() - overall_start, 3), "sec")
+    logger.info("timing stage=total seconds=%.3f", time.perf_counter() - overall_start)
 
     return {"words": [{"name": word, "score": score} for word, score in sorted_words]}

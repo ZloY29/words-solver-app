@@ -1,23 +1,42 @@
 import os
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request
 from dotenv import load_dotenv
 from werkzeug.exceptions import NotFound
 
 from backend.words_solver.dictionary import load_words, build_trie
 from backend.words_solver.model import load_letter_model
 from backend.words_solver.routes import create_routes
+from backend.words_solver.logging_config import configure_logging, set_request_id
+import logging
+import warnings
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> Flask:
     load_dotenv()
+    configure_logging()
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     assets_dir = os.path.join(base_dir, "assets")
+
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+    warnings.filterwarnings("ignore", category=FutureWarning)
 
     model_path = os.path.join(assets_dir, "letter_recognition_model.h5")
     dictionary_path = os.path.join(assets_dir, "cleaned_filtered_russian_words.json")
 
     app = Flask(__name__, static_folder="static")
+
+    @app.before_request
+    def _before_request():
+        rid = set_request_id()
+        logger.info("request start method=%s path=%s", getattr(request, "method", "?"), getattr(request, "path", "?"))
+
+    @app.after_request
+    def _after_request(response):
+        logger.info("request end status=%s", response.status_code)
+        return response
 
     model = load_letter_model(model_path)
     words = load_words(dictionary_path)
