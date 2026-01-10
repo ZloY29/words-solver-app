@@ -24,8 +24,14 @@ def create_app() -> Flask:
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
     warnings.filterwarnings("ignore", category=FutureWarning)
 
-    model_path = os.path.join(assets_dir, "letter_recognition_model.h5")
-    dictionary_path = os.path.join(assets_dir, "cleaned_filtered_russian_words.json")
+    default_model_path = os.path.join(assets_dir, "letter_recognition_model.h5")
+    default_dictionary_path = os.path.join(assets_dir, "cleaned_filtered_russian_words.json")
+
+    model_path = os.getenv("MODEL_PATH", default_model_path)
+    dictionary_path = os.getenv("DICTIONARY_PATH", default_dictionary_path)
+
+    logger.info("using model_path=%s", model_path)
+    logger.info("using dictionary_path=%s", dictionary_path)
 
     app = Flask(__name__, static_folder="static")
 
