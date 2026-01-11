@@ -1,11 +1,18 @@
 import logging
+import os
 import time
 
 import cv2
 import numpy as np
 from keras.utils import img_to_array
 
+from .smart_crop import find_board_bbox
 from .word_search import find_words
+
+try:
+    from .logging_config import request_id_var
+except Exception:  # pragma: no cover
+    request_id_var = None
 
 logger = logging.getLogger(__name__)
 
@@ -138,10 +145,82 @@ def process_image(image_path, model, trie):
         return {"error": "Failed to read the image"}
     _log_stage("read_image", t0)
 
-    # Crop (current hardcoded coordinates)
+    # Crop
     t0 = time.perf_counter()
-    x_start_crop, y_start_crop, x_end_crop, y_end_crop = 37, 445, 552, 975
-    cropped_image = manual_crop(image, x_start_crop, y_start_crop, x_end_crop, y_end_crop)
+    cropped_image = None
+
+    use_smart = os.getenv("SMART_CROP", "1") not in {"0", "false", "False"}
+    debug_dir = os.getenv("SMART_CROP_DEBUG_DIR")
+    debug = bool(debug_dir)
+
+    if use_smart:
+        roi_top = float(os.getenv("SMART_CROP_ROI_TOP", "0.18"))
+        roi_bottom = float(os.getenv("SMART_CROP_ROI_BOTTOM", "0.92"))
+        s_max = int(os.getenv("SMART_CROP_S_MAX", "60"))
+        v_min = int(os.getenv("SMART_CROP_V_MIN", "200"))
+        min_tiles = int(os.getenv("SMART_CROP_MIN_TILES", "15"))
+        pad_frac = float(os.getenv("SMART_CROP_PAD_FRAC", "0.02"))
+
+        bbox, info, mask, candidates, cluster = find_board_bbox(
+            image,
+            roi_top=roi_top,
+            roi_bottom=roi_bottom,
+            s_max=s_max,
+            v_min=v_min,
+            min_tiles=min_tiles,
+            pad_frac=pad_frac,
+            debug=debug,
+        )
+
+        if bbox is not None:
+            cropped_image = image[bbox.y0 : bbox.y1, bbox.x0 : bbox.x1]
+            logger.info(
+                "smart_crop ok bbox=(%d,%d)-(%d,%d) tiles=%d candidates=%d",
+                bbox.x0,
+                bbox.y0,
+                bbox.x1,
+                bbox.y1,
+                int(info.get("cluster", 0.0)),
+                int(info.get("candidates", 0.0)),
+            )
+
+            if debug_dir:
+                os.makedirs(debug_dir, exist_ok=True)
+                rid = "-"
+                if request_id_var is not None:
+                    rid = request_id_var.get() or "-"
+                tag = f"{int(time.time() * 1000)}_{rid}"
+
+                overlay = image.copy()
+                for r in candidates:
+                    cv2.rectangle(overlay, (r.x0, r.y0), (r.x1, r.y1), (0, 0, 255), 1)
+                for r in cluster:
+                    cv2.rectangle(overlay, (r.x0, r.y0), (r.x1, r.y1), (0, 255, 0), 2)
+                cv2.rectangle(
+                    overlay,
+                    (bbox.x0, bbox.y0),
+                    (bbox.x1, bbox.y1),
+                    (255, 0, 0),
+                    3,
+                )
+
+                cv2.imwrite(os.path.join(debug_dir, f"{tag}_norm.png"), image)
+                if mask is not None:
+                    cv2.imwrite(os.path.join(debug_dir, f"{tag}_mask.png"), mask)
+                cv2.imwrite(os.path.join(debug_dir, f"{tag}_overlay.png"), overlay)
+                cv2.imwrite(os.path.join(debug_dir, f"{tag}_crop.png"), cropped_image)
+        else:
+            logger.info(
+                "smart_crop miss tiles=%d candidates=%d",
+                int(info.get("cluster", 0.0)),
+                int(info.get("candidates", 0.0)),
+            )
+
+    if cropped_image is None:
+        # Fallback hardcoded coordinates (works for a subset of layouts)
+        x_start_crop, y_start_crop, x_end_crop, y_end_crop = 37, 445, 552, 975
+        cropped_image = manual_crop(image, x_start_crop, y_start_crop, x_end_crop, y_end_crop)
+
     _log_stage("crop_image", t0)
 
     # Split into 5x5
