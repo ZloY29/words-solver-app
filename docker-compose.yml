@@ -1,0 +1,28 @@
+services:
+  app:
+    build: .
+    image: words-solver-app:v2
+    container_name: words-solver-v2
+    restart: unless-stopped
+
+    ports:
+      - "8001:8000"
+
+    environment:
+      PORT: "8000"
+      TF_CPP_MIN_LOG_LEVEL: "3"
+      MAX_UPLOAD_BYTES: "5242880"
+      SMART_CROP: "1"
+      ENABLE_METRICS: "1"
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
