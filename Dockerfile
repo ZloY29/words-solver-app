@@ -35,4 +35,4 @@ COPY --from=frontend-builder /app/frontend/dist ./backend/static
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
-CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "1", "--timeout", "300", "--access-logfile", "-", "--error-logfile", "-"]
+CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "1", "--timeout", "45", "--access-logfile", "-", "--error-logfile", "-"]
